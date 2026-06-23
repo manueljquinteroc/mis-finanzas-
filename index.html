@@ -266,7 +266,7 @@ function todasCats(){return [
   {id:'ahorro',label:'Ahorro',icon:'💰',monto:META_AHORRO,tipo:'ahorro',limite:META_AHORRO},
 ];}
 
-const CATS_RAPIDAS = [
+const CATS_RAPIDAS_BASE = [
   {id:'comida_fuera',label:'Comida',     icon:'🍔'},
   {id:'combustible', label:'Gasolina',   icon:'⛽'},
   {id:'comida',      label:'Super',      icon:'🛒'},
@@ -285,6 +285,14 @@ const CATS_RAPIDAS = [
   {id:'ayudas',      label:'Ayudas',    icon:'🤲'},
   {id:'deporte',     label:'Deporte',   icon:'🏋️'},
 ];
+function catsRapidas(){
+  const validIds=new Set([...FIJOS.map(f=>f.id),...VARIABLES.map(v=>v.id)]);
+  const base=CATS_RAPIDAS_BASE.filter(c=>validIds.has(c.id));
+  const baseIds=new Set(base.map(c=>c.id));
+  const custom=[...FIJOS.filter(f=>f.custom),...VARIABLES.filter(v=>v.custom)]
+    .filter(c=>!baseIds.has(c.id)).map(c=>({id:c.id,label:c.label,icon:c.icon}));
+  return [...base,...custom];
+}
 
 const FUENTES = [
   {id:'quintecars',label:'Quintecars',  icon:'🔧'},
@@ -358,23 +366,41 @@ function aplicarConfig(){
   (cfg.deudasCustom||[]).forEach(d=>{
     if(!DEUDAS_CFG.find(x=>x.id===d.id))DEUDAS_CFG.push({...d,custom:true});
   });
+  const fijosRemoved=cfg.fijosRemoved||[];
+  FIJOS = FIJOS.filter(f=>!f.custom && !fijosRemoved.includes(f.id));
   if(cfg.fijosOverride){
     FIJOS.forEach(f=>{if(cfg.fijosOverride[f.id]!=null)f.monto=cfg.fijosOverride[f.id];});
   }
+  (cfg.fijosCustom||[]).forEach(f=>{
+    if(!FIJOS.find(x=>x.id===f.id))FIJOS.push({...f,custom:true});
+  });
+  const varsRemoved=cfg.varsRemoved||[];
+  VARIABLES = VARIABLES.filter(v=>!v.custom && !varsRemoved.includes(v.id));
   if(cfg.varsOverride){
     VARIABLES.forEach(v=>{if(cfg.varsOverride[v.id]!=null)v.limite=cfg.varsOverride[v.id];});
   }
+  (cfg.varsCustom||[]).forEach(v=>{
+    if(!VARIABLES.find(x=>x.id===v.id))VARIABLES.push({...v,custom:true});
+  });
   DEUDAS_CFG.forEach(d=>{if(!ST.deudas[d.id])ST.deudas[d.id]={pagado:0};});
 }
 
 async function guardarAjustesCfg(){
   FIJOS.forEach(f=>{
     const v=parseFloat(document.getElementById('cfgFijo_'+f.id)?.value);
-    if(!isNaN(v)&&v>=0){ST.cfg.fijosOverride[f.id]=v;f.monto=v;}
+    if(!isNaN(v)&&v>=0){
+      if(f.custom){const c=ST.cfg.fijosCustom.find(x=>x.id===f.id);if(c)c.monto=v;}
+      else ST.cfg.fijosOverride[f.id]=v;
+      f.monto=v;
+    }
   });
   VARIABLES.forEach(v=>{
     const val=parseFloat(document.getElementById('cfgVar_'+v.id)?.value);
-    if(!isNaN(val)&&val>=0){ST.cfg.varsOverride[v.id]=val;v.limite=val;}
+    if(!isNaN(val)&&val>=0){
+      if(v.custom){const c=ST.cfg.varsCustom.find(x=>x.id===v.id);if(c)c.limite=val;}
+      else ST.cfg.varsOverride[v.id]=val;
+      v.limite=val;
+    }
   });
   DEUDAS_CFG.forEach(d=>{
     const tEl=document.getElementById('cfgDeudaTotal_'+d.id);
@@ -421,6 +447,57 @@ async function eliminarDeudaCfg(id){
   render();
 }
 
+function agregarFijoCustom(){
+  const label=(document.getElementById('cfgNewFijoLabel')?.value||'').trim();
+  const monto=parseFloat(document.getElementById('cfgNewFijoMonto')?.value);
+  const icon=(document.getElementById('cfgNewFijoIcon')?.value||'💵').trim()||'💵';
+  if(!label||!monto||monto<=0){showToast('Completa nombre y monto del gasto','rd');return;}
+  const id='custom_'+Date.now();
+  ST.cfg.fijosCustom.push({id,label,icon,monto});
+  aplicarConfig();
+  saveData();
+  showToast('✓ Gasto fijo agregado','gr');
+  render();
+}
+async function eliminarFijoCfg(id){
+  if(!confirm('¿Eliminar este gasto fijo de la lista?'))return;
+  const f=FIJOS.find(x=>x.id===id);
+  if(f?.custom){
+    ST.cfg.fijosCustom=ST.cfg.fijosCustom.filter(x=>x.id!==id);
+  } else {
+    if(!ST.cfg.fijosRemoved.includes(id))ST.cfg.fijosRemoved.push(id);
+  }
+  aplicarConfig();
+  await saveData();
+  showToast('Gasto fijo eliminado de la lista');
+  render();
+}
+function agregarVarCustom(){
+  const label=(document.getElementById('cfgNewVarLabel')?.value||'').trim();
+  const limite=parseFloat(document.getElementById('cfgNewVarMonto')?.value);
+  const icon=(document.getElementById('cfgNewVarIcon')?.value||'💵').trim()||'💵';
+  if(!label||!limite||limite<=0){showToast('Completa nombre y límite del gasto','rd');return;}
+  const id='custom_'+Date.now();
+  ST.cfg.varsCustom.push({id,label,icon,limite});
+  aplicarConfig();
+  saveData();
+  showToast('✓ Gasto variable agregado','gr');
+  render();
+}
+async function eliminarVarCfg(id){
+  if(!confirm('¿Eliminar este gasto variable de la lista?'))return;
+  const v=VARIABLES.find(x=>x.id===id);
+  if(v?.custom){
+    ST.cfg.varsCustom=ST.cfg.varsCustom.filter(x=>x.id!==id);
+  } else {
+    if(!ST.cfg.varsRemoved.includes(id))ST.cfg.varsRemoved.push(id);
+  }
+  aplicarConfig();
+  await saveData();
+  showToast('Gasto variable eliminado de la lista');
+  render();
+}
+
 // ══════════════════════════════════════════════
 // ESTADO
 // ══════════════════════════════════════════════
@@ -433,7 +510,7 @@ const ST={
   pagos_deuda:[],
   inversiones:defaultInversiones(),
   pagos_inversion:[],
-  cfg:{deudasOverride:{},deudasCustom:[],deudasRemoved:[],fijosOverride:{},varsOverride:{}},
+  cfg:{deudasOverride:{},deudasCustom:[],deudasRemoved:[],fijosOverride:{},varsOverride:{},fijosCustom:[],fijosRemoved:[],varsCustom:[],varsRemoved:[]},
   tab:'inicio', mes:getMesKey(),
   online:navigator.onLine, syncing:false,
   dark:(localStorage.getItem('darkMode')==='1'),
@@ -475,7 +552,7 @@ async function loadData(){
       ST.pagos_deuda = data.pagos_deuda  ||[];
       ST.inversiones    = data.inversiones    ||defaultInversiones();
       ST.pagos_inversion= data.pagos_inversion||[];
-      ST.cfg = data.config||{deudasOverride:{},deudasCustom:[],deudasRemoved:[],fijosOverride:{},varsOverride:{}};
+      ST.cfg = data.config||{deudasOverride:{},deudasCustom:[],deudasRemoved:[],fijosOverride:{},varsOverride:{},fijosCustom:[],fijosRemoved:[],varsCustom:[],varsRemoved:[]};
       aplicarConfig();
       saveCache();
     } else { loadCache(); }
@@ -526,7 +603,7 @@ function subChanges(){
         ST.pagos_deuda=p.new.pagos_deuda||[];
         ST.inversiones=p.new.inversiones||defaultInversiones();
         ST.pagos_inversion=p.new.pagos_inversion||[];
-        ST.cfg=p.new.config||{deudasOverride:{},deudasCustom:[],deudasRemoved:[],fijosOverride:{},varsOverride:{}};
+        ST.cfg=p.new.config||{deudasOverride:{},deudasCustom:[],deudasRemoved:[],fijosOverride:{},varsOverride:{},fijosCustom:[],fijosRemoved:[],varsCustom:[],varsRemoved:[]};
         aplicarConfig();
         saveCache();render();showToast('↻ Sincronizado','gr');
       }
@@ -1299,7 +1376,7 @@ function rNav(){
 // ── QUICK PANEL ────────────────────────────────
 function rQuick(){
   const isG=ST.qTipo==='gasto';
-  const cats=isG?CATS_RAPIDAS:FUENTES;
+  const cats=isG?catsRapidas():FUENTES;
   const selId=isG?ST.qCat:ST.qFuente;
   const clr=isG?'#B83232':'#2D7A4F';
   const chips=cats.map(c=>`<div class="cchip ${c.id===selId?(isG?'sg':'si'):''}" onclick="${isG?`ST.qCat='${c.id}'`:`ST.qFuente='${c.id}'`};render()"><div class="ci">${c.icon}</div><div class="cl" style="color:${c.id===selId?clr:'#9B9B9B'}">${c.label}</div></div>`).join('');
@@ -1460,13 +1537,15 @@ function rAjustes(){
   </div>`).join('');
 
   const fRows=FIJOS.map(f=>`<div class="drow-assign" style="border-bottom:1px solid #CFE2FA;padding-bottom:8px">
-    <span>${f.icon} ${esc(f.label)}</span>
+    <span>${f.icon} ${esc(f.label)}${f.custom?' <span style="font-size:9px;color:#9B9B9B">(personalizado)</span>':''}</span>
     <input id="cfgFijo_${f.id}" type="number" value="${f.monto}">
+    <button class="mbtn bd" onclick="eliminarFijoCfg('${f.id}')">✕</button>
   </div>`).join('');
 
   const vRows=VARIABLES.map(v=>`<div class="drow-assign" style="border-bottom:1px solid #CFE2FA;padding-bottom:8px">
-    <span>${v.icon} ${esc(v.label)}</span>
+    <span>${v.icon} ${esc(v.label)}${v.custom?' <span style="font-size:9px;color:#9B9B9B">(personalizado)</span>':''}</span>
     <input id="cfgVar_${v.id}" type="number" value="${v.limite}">
+    <button class="mbtn bd" onclick="eliminarVarCfg('${v.id}')">✕</button>
   </div>`).join('');
 
   return`<div class="overlay">
@@ -1492,9 +1571,27 @@ function rAjustes(){
 
       <div class="slabel">Gastos Fijos (mensual)</div>
       <div class="card">${fRows}</div>
+      <div class="deuda-assign" style="margin-bottom:14px">
+        <div class="deuda-assign-title">+ Agregar nuevo gasto fijo</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <input class="inp" id="cfgNewFijoIcon" placeholder="💵" style="width:55px;text-align:center;margin-bottom:0">
+          <input class="inp" id="cfgNewFijoLabel" placeholder="Nombre" style="margin-bottom:0">
+          <input class="inp" id="cfgNewFijoMonto" type="number" placeholder="Monto $" style="margin-bottom:0">
+        </div>
+        <button class="bsave ba" style="padding:9px;font-size:13px" onclick="agregarFijoCustom()">+ Agregar gasto fijo</button>
+      </div>
 
       <div class="slabel">Gastos Variables (límite mensual)</div>
       <div class="card">${vRows}</div>
+      <div class="deuda-assign" style="margin-bottom:14px">
+        <div class="deuda-assign-title">+ Agregar nuevo gasto variable</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <input class="inp" id="cfgNewVarIcon" placeholder="💵" style="width:55px;text-align:center;margin-bottom:0">
+          <input class="inp" id="cfgNewVarLabel" placeholder="Nombre" style="margin-bottom:0">
+          <input class="inp" id="cfgNewVarMonto" type="number" placeholder="Límite $" style="margin-bottom:0">
+        </div>
+        <button class="bsave ba" style="padding:9px;font-size:13px" onclick="agregarVarCustom()">+ Agregar gasto variable</button>
+      </div>
 
       <button class="bsave bg" onclick="guardarAjustesCfg()">💾 Guardar Ajustes</button>
       <button class="bsave bk" style="margin-top:8px;background:#9B9B9B" onclick="cerrarAjustes()">Cerrar sin guardar</button>
@@ -1515,7 +1612,7 @@ function guardarQ(){
   const monto=parseFloat(ST.qMonto);
   if(!monto||monto<=0){ST.qErr='Ingresa un monto válido.';render();return;}
   const isG=ST.qTipo==='gasto';
-  const desc=ST.qDesc.trim()||(isG?(CATS_RAPIDAS.find(c=>c.id===ST.qCat)?.label||'Gasto'):(FUENTES.find(f=>f.id===ST.qFuente)?.label||'Ingreso'));
+  const desc=ST.qDesc.trim()||(isG?(catsRapidas().find(c=>c.id===ST.qCat)?.label||'Gasto'):(FUENTES.find(f=>f.id===ST.qFuente)?.label||'Ingreso'));
   const dM=ST.qAsignar?parseFloat(ST.qDeudaMonto)||0:0;
   const dId=ST.qAsignar?ST.qDeudaId:null;
   ST.qMonto='';ST.qDesc='';ST.qErr='';ST.qOpen=false;ST.qAsignar=false;ST.qDeudaMonto='';
