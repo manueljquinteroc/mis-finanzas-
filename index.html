@@ -215,9 +215,6 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 // ══════════════════════════════════════════════
 const S_MES   = 4.33;
 const ING_SEM = 643;
-const META_SEM= 821;
-const COOP_SEM= 300;
-const COOP_MES= Math.round(COOP_SEM*S_MES);
 
 let FIJOS = [
   {id:'renta',        label:'Renta',               icon:'🏠', monto:300},
@@ -226,7 +223,6 @@ let FIJOS = [
   {id:'seguro_salud', label:'Seguro de Salud',     icon:'🏥', monto:55},
   {id:'telefono',     label:'Teléfono',             icon:'📱', monto:100},
   {id:'tarjetas',     label:'Tarjetas de Crédito', icon:'💳', monto:150},
-  {id:'cooperativa',  label:'Cooperativa',         icon:'🤝', monto:COOP_MES},
   {id:'comida',       label:'Comida (casa)',        icon:'🛒', monto:Math.round(60*S_MES)},
   {id:'combustible',  label:'Combustible',          icon:'⛽', monto:Math.round(35*S_MES)},
   {id:'suscripciones',label:'Suscripciones',        icon:'📺', monto:30},
@@ -245,6 +241,24 @@ let VARIABLES = [
 ];
 function totalVars(){return VARIABLES.reduce((s,c)=>s+c.limite,0);}
 const META_AHORRO = 400;
+
+// ── CALCULADORA SEMANAL INTELIGENTE ─────────────
+// Recalcula cada vez que se llama: cuánto hay que producir esta semana
+// para cubrir lo que falta del presupuesto del mes, repartido entre
+// las semanas que quedan del mes.
+function presupuestoMesTotal(){return totalFijos()+totalVars()+META_AHORRO;}
+function semanasRestantesMes(){
+  const hoy=new Date(HOY()+'T12:00:00');
+  const finMes=new Date(hoy.getFullYear(),hoy.getMonth()+1,0);
+  const diasRestantes=Math.floor((finMes-hoy)/86400000)+1;
+  return Math.max(1,Math.ceil(diasRestantes/7));
+}
+function metaSemanalDinamica(){
+  const mes=getMesKey();
+  const tIMes=(ST.ingresos||[]).filter(i=>i.fecha?.startsWith(mes)).reduce((s,i)=>s+i.monto,0);
+  const restante=Math.max(0,presupuestoMesTotal()-tIMes);
+  return Math.round(restante/semanasRestantesMes());
+}
 
 function todasCats(){return [
   ...FIJOS.map(c=>({...c,tipo:'fijo',   limite:c.monto})),
@@ -265,7 +279,6 @@ const CATS_RAPIDAS = [
   {id:'telefono',    label:'Teléfono',   icon:'📱'},
   {id:'seguro_carro',label:'Seg. Carro', icon:'🚗'},
   {id:'seguro_salud',label:'Seg. Salud', icon:'🏥'},
-  {id:'cooperativa', label:'Cooperativa',icon:'🤝'},
   {id:'eventos',     label:'Eventos',   icon:'🎉'},
   {id:'regalos',     label:'Regalos',   icon:'🎁'},
   {id:'suscripciones',label:'Suscrip.', icon:'📺'},
@@ -663,12 +676,12 @@ function generarTips(catId,monto,gasM){
   if(lim>0&&gastado>lim)tips.push({t:'r',icon:'🚨',titulo:'¡Límite superado!',msg:`Te pasaste el presupuesto de ${cat?.label} por ${f2(gastado-lim)} este mes.`});
   else if(lim>0&&gastado>=lim*.8)tips.push({t:'a',icon:'⚠️',titulo:'Presupuesto casi agotado',msg:`Llevas el ${Math.round((gastado/lim)*100)}% de ${cat?.label}. Quedan ${f2(lim-gastado)}.`});
   if(totalI>0&&totalG>totalI)tips.push({t:'r',icon:'📉',titulo:'Gastas más de lo que ganas',msg:`Este mes llevas ${f2(totalG)} gastado y ${f2(totalI)} ingresado.`});
-  if(iSem===0)tips.push({t:'a',icon:'💡',titulo:'Sin ingresos esta semana',msg:`Recuerda registrar lo que ganas. Meta: ${fI(META_SEM)}/sem.`});
-  else if(iSem<META_SEM*.5)tips.push({t:'a',icon:'🎯',titulo:'Meta semanal lejos',msg:`Llevas ${f2(iSem)} de ${fI(META_SEM)} esta semana.`});
-  else if(iSem>=META_SEM)tips.push({t:'g',icon:'🎉',titulo:'¡Meta semanal alcanzada!',msg:`¡Excelente semana Manuel! Llevas ${f2(iSem)}.`});
+  if(iSem===0)tips.push({t:'a',icon:'💡',titulo:'Sin ingresos esta semana',msg:`Recuerda registrar lo que ganas. Meta: ${fI(metaSemanalDinamica())}/sem.`});
+  else if(iSem<metaSemanalDinamica()*.5)tips.push({t:'a',icon:'🎯',titulo:'Meta semanal lejos',msg:`Llevas ${f2(iSem)} de ${fI(metaSemanalDinamica())} esta semana.`});
+  else if(iSem>=metaSemanalDinamica())tips.push({t:'g',icon:'🎉',titulo:'¡Meta semanal alcanzada!',msg:`¡Excelente semana Manuel! Llevas ${f2(iSem)}.`});
   if(lim>0&&monto>=lim*.5&&cat?.tipo==='variable')tips.push({t:'a',icon:'💸',titulo:'Gasto grande',msg:`Este gasto es el ${Math.round((monto/lim)*100)}% de tu presupuesto de ${cat?.label}.`});
   if(tips.length===0&&lim>0)tips.push({t:'g',icon:'✅',titulo:'Vas bien',msg:`Llevas ${Math.round((gastado/lim)*100)}% de ${cat?.label}. Quedan ${f2(lim-gastado)}.`});
-  tips.push({t:'b',icon:'🔧',titulo:'Consejo Quintecars',msg:`Meta ${fI(META_SEM)}/sem = ~${fI(META_SEM/5)}/día. Un servicio de frenos te cubre un día completo.`});
+  tips.push({t:'b',icon:'🔧',titulo:'Consejo Quintecars',msg:`Meta ${fI(metaSemanalDinamica())}/sem = ~${fI(metaSemanalDinamica()/5)}/día. Un servicio de frenos te cubre un día completo.`});
   return tips.sort((a,b)=>({r:0,a:1,g:2,b:3}[a.t]-({r:0,a:1,g:2,b:3}[b.t]))).slice(0,3);
 }
 function mostrarTips(cat,monto,gasM){ST.tips=generarTips(cat,monto,gasM);ST.tOpen=true;render();}
@@ -729,7 +742,7 @@ function setSC(){
 function rHeader(){
   const lh=getLunes(HOY());
   const iS=ST.ingresos.filter(i=>getLunes(i.fecha)===lh).reduce((s,i)=>s+i.monto,0);
-  const pct=Math.min(100,(iS/META_SEM)*100);
+  const pct=Math.min(100,(iS/metaSemanalDinamica())*100);
   const bc=pct>=100?'#2D7A4F':pct>=70?'#A0622A':'#B83232';
   const meses=getMesesDisp();
   const opts=meses.map(m=>`<option value="${m}" ${m===ST.mes?'selected':''}>${getMesLabel(m)}</option>`).join('');
@@ -746,7 +759,7 @@ function rHeader(){
       </div>
     </div>
     <div class="wbar">
-      <div class="wbar-row"><span>Esta semana — meta ${fI(META_SEM)}</span><span style="color:${bc};font-weight:bold">${f2(iS)}</span></div>
+      <div class="wbar-row"><span>Esta semana — meta ${fI(metaSemanalDinamica())}</span><span style="color:${bc};font-weight:bold">${f2(iS)}</span></div>
       <div class="bt"><div class="bf" style="width:${pct}%;background:${bc}"></div></div>
     </div>
   </div>`;}
@@ -762,9 +775,9 @@ function rachaSemanal(){
   const totalSem=l=>ST.ingresos.filter(i=>getLunes(i.fecha)===l).reduce((s,i)=>s+i.monto,0);
   let racha=0;
   let semana=getLunes(HOY());
-  if(totalSem(semana)>=META_SEM)racha++;
+  if(totalSem(semana)>=metaSemanalDinamica())racha++;
   semana=prevLunes(semana);
-  while(totalSem(semana)>=META_SEM){racha++;semana=prevLunes(semana);}
+  while(totalSem(semana)>=metaSemanalDinamica()){racha++;semana=prevLunes(semana);}
   return racha;
 }
 
@@ -779,7 +792,7 @@ function rInicio(){
   const lh=getLunes(HOY());
   const iS=ST.ingresos.filter(i=>getLunes(i.fecha)===lh).reduce((s,i)=>s+i.monto,0);
   const gS=ST.gastos.filter(g=>getLunes(g.fecha)===lh).reduce((s,g)=>s+g.monto,0);
-  const pS=Math.min(100,(iS/META_SEM)*100);
+  const pS=Math.min(100,(iS/metaSemanalDinamica())*100);
   const bS=pS>=100?'#2D7A4F':pS>=70?'#A0622A':'#B83232';
   const gastadoCat=id=>gasM.filter(g=>g.categoria===id).reduce((s,g)=>s+g.monto,0);
   const alertas=VARIABLES.filter(c=>gastadoCat(c.id)>c.limite);
@@ -799,7 +812,7 @@ function rInicio(){
   // Detalle semanal: cuánto falta producir y cuánto se gastó de más
   const presupuestoSemanal=(totalFijos()+totalVars())/S_MES;
   const gastoDeMas=gS-presupuestoSemanal;
-  const ingresoFaltante=META_SEM-iS;
+  const ingresoFaltante=metaSemanalDinamica()-iS;
 
   // Detalle mensual: presupuesto vs gastado y categoría más/menos disciplinada
   const presupuestoMes=totalFijos()+totalVars();
@@ -841,7 +854,7 @@ function rInicio(){
     <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px"><span style="color:#6B6B6B">Ganado</span><span style="color:#2D7A4F;font-weight:bold">${f2(iS)}</span></div>
     <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:9px"><span style="color:#6B6B6B">Gastado</span><span style="color:#B83232;font-weight:bold">${f2(gS)}</span></div>
     <div class="bt" style="height:6px;margin-bottom:9px"><div class="bf" style="width:${pS}%;background:${bS}"></div></div>
-    <div style="font-size:12px;margin-bottom:5px;color:${ingresoFaltante>0?'#A0622A':'#2D7A4F'}">${ingresoFaltante>0?`📈 Necesitas producir <strong>${fI(ingresoFaltante)}</strong> más para llegar a tu meta de ${fI(META_SEM)}.`:`✓ Meta semanal alcanzada — llevas <strong>${fI(iS-META_SEM)}</strong> de sobra.`}</div>
+    <div style="font-size:12px;margin-bottom:5px;color:${ingresoFaltante>0?'#A0622A':'#2D7A4F'}">${ingresoFaltante>0?`📈 Necesitas producir <strong>${fI(ingresoFaltante)}</strong> más para llegar a tu meta de ${fI(metaSemanalDinamica())}.`:`✓ Meta semanal alcanzada — llevas <strong>${fI(iS-metaSemanalDinamica())}</strong> de sobra.`}</div>
     <div style="font-size:12px;color:${gastoDeMas>0?'#B83232':'#2D7A4F'}">${gastoDeMas>0?`⚠️ Gastaste <strong>${fI(gastoDeMas)}</strong> más de tu presupuesto semanal (${fI(presupuestoSemanal)}).`:`✓ Vas <strong>${fI(-gastoDeMas)}</strong> por debajo de tu presupuesto semanal (${fI(presupuestoSemanal)}).`}</div>
   </div>`;
 
@@ -891,16 +904,20 @@ function rInicio(){
     </div>
   </div>`;
 
-  // Meta semanal
+  // Calculadora semanal inteligente
+  const metaSemDin=metaSemanalDinamica();
+  const semRest=semanasRestantesMes();
+  const faltanSem=Math.max(0,metaSemDin-iS);
   h+=`<div class="card">
-    <div class="clabel">Tu Meta Semanal</div>
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:11px">
-      <div style="text-align:center"><div style="font-size:10px;color:#9B9B9B">HOY</div><div style="font-size:19px;font-weight:bold;color:#6B6B6B">$${ING_SEM}</div></div>
+    <div class="clabel">🧮 Calculadora Semanal Inteligente</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <div style="text-align:center"><div style="font-size:10px;color:#9B9B9B">GANADO ESTA SEM.</div><div style="font-size:19px;font-weight:bold;color:#6B6B6B">${f2(iS)}</div></div>
       <div style="color:#9B9B9B;font-size:16px">→</div>
-      <div style="text-align:center"><div style="font-size:10px;color:#9B9B9B">META</div><div style="font-size:27px;font-weight:bold;color:#2D7A4F">$${META_SEM}</div></div>
-      <div style="flex:1;border-left:1px solid #CFE2FA;padding-left:10px"><div style="font-size:10px;color:#9B9B9B">FALTAN</div><div style="font-size:17px;font-weight:bold;color:#A0622A">+$${META_SEM-ING_SEM}/sem</div></div>
+      <div style="text-align:center"><div style="font-size:10px;color:#9B9B9B">META ACTUAL</div><div style="font-size:27px;font-weight:bold;color:#2D7A4F">${fI(metaSemDin)}</div></div>
+      <div style="flex:1;border-left:1px solid #CFE2FA;padding-left:10px"><div style="font-size:10px;color:#9B9B9B">FALTAN</div><div style="font-size:17px;font-weight:bold;color:#A0622A">${fI(faltanSem)}/sem</div></div>
     </div>
-    ${[{l:'Fijos',v:totalFijos(),c:'#B83232'},{l:'Variables',v:totalVars(),c:'#A0622A'},{l:'Ahorro',v:META_AHORRO,c:'#2D7A4F'},{l:'Total/mes',v:totalFijos()+totalVars()+META_AHORRO,c:'#1A1A1A',b:true}]
+    <div style="font-size:11px;color:#9B9B9B;margin-bottom:11px">Se recalcula sola: toma lo que falta del presupuesto de ${getMesLabel(mes)} (ya ganaste ${fI(tI)}) y lo reparte entre las ${semRest} semana${semRest>1?'s':''} que quedan.</div>
+    ${[{l:'Fijos',v:totalFijos(),c:'#B83232'},{l:'Variables',v:totalVars(),c:'#A0622A'},{l:'Ahorro',v:META_AHORRO,c:'#2D7A4F'},{l:'Total/mes',v:presupuestoMesTotal(),c:'#1A1A1A',b:true}]
       .map(r=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #CFE2FA;font-size:12px"><span style="color:#6B6B6B">${r.l}</span><span style="color:${r.c};font-weight:${r.b?'bold':'normal'}">${fI(r.v)}</span></div>`).join('')}
   </div>`;
 
@@ -1244,11 +1261,11 @@ function rHistorial(){
   let h=rGraficaIngGas()+rGraficaCategorias(mes)+rGraficaFuentesIngreso(mes)+rGraficaDeuda();
   h+=`<div class="slabel">Historial — ${getMesLabel(mes)}</div>`;
   sems.forEach(([k,v])=>{
-    const pct=Math.min(100,(v/META_SEM)*100),clr=pct>=100?'#2D7A4F':pct>=70?'#A0622A':'#B83232';
+    const pct=Math.min(100,(v/metaSemanalDinamica())*100),clr=pct>=100?'#2D7A4F':pct>=70?'#A0622A':'#B83232';
     h+=`<div class="wsem">
-      <div class="wsem-r"><span style="color:#6B6B6B">Semana ${k}</span><span style="font-weight:bold;color:${clr}">${f2(v)} / $${META_SEM}</span></div>
+      <div class="wsem-r"><span style="color:#6B6B6B">Semana ${k}</span><span style="font-weight:bold;color:${clr}">${f2(v)} / $${metaSemanalDinamica()}</span></div>
       <div class="bt"><div class="bf" style="width:${pct}%;background:${clr}"></div></div>
-      <div style="font-size:10px;margin-top:3px;color:${clr}">${pct>=100?'✓ Meta alcanzada':`Faltan ${fI(META_SEM-v)}`}</div>
+      <div style="font-size:10px;margin-top:3px;color:${clr}">${pct>=100?'✓ Meta alcanzada':`Faltan ${fI(metaSemanalDinamica()-v)}`}</div>
     </div>`;
   });
   const todos=[...ingM.map(i=>({...i,_t:'ingreso'})),...gasM.map(g=>({...g,_t:'gasto'}))].sort((a,b)=>b.fecha.localeCompare(a.fecha));
