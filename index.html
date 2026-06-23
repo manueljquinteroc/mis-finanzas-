@@ -241,6 +241,7 @@ let VARIABLES = [
   {id:'eventos',     label:'Eventos',       icon:'🎉',limite:80},
   {id:'regalos',     label:'Regalos',       icon:'🎁',limite:80},
   {id:'ayudas',      label:'Ayudas',        icon:'🤲',limite:50},
+  {id:'deporte',     label:'Deporte',       icon:'🏋️',limite:95},
 ];
 function totalVars(){return VARIABLES.reduce((s,c)=>s+c.limite,0);}
 const META_AHORRO = 400;
@@ -269,6 +270,7 @@ const CATS_RAPIDAS = [
   {id:'regalos',     label:'Regalos',   icon:'🎁'},
   {id:'suscripciones',label:'Suscrip.', icon:'📺'},
   {id:'ayudas',      label:'Ayudas',    icon:'🤲'},
+  {id:'deporte',     label:'Deporte',   icon:'🏋️'},
 ];
 
 const FUENTES = [
@@ -292,12 +294,14 @@ let DEUDAS_CFG = [
 function deudaTotalOrig(){return DEUDAS_CFG.reduce((s,d)=>s+d.total,0);}
 
 // INVERSIONES & FONDO DE EMERGENCIA
-function metaEmergencia(){return Math.round(totalFijos() * 3);} // ~$7,518
+const META_EMERGENCIA_BOA = 3500;
+const PORC_EMERGENCIA = 0.10; // % sugerido de ingresos para el fondo
+function metaEmergencia(){return META_EMERGENCIA_BOA;} // Fondo de emergencia en Bank of America
 const INV_CFG = [
   {id:'robinhood',  label:'Robinhood',          icon:'🟢', tipo:'inversion', color:'#22c55e', nota:'Acciones & ETFs'},
   {id:'coinbase',   label:'Coinbase',            icon:'🔵', tipo:'inversion', color:'#3b82f6', nota:'Criptomonedas'},
   {id:'fidelity',   label:'Fidelity',            icon:'🟣', tipo:'inversion', color:'#8b5cf6', nota:'Retiro & Fondos índice'},
-  {id:'capital_one',label:'Capital One Savings', icon:'🏦', tipo:'emergencia', color:'#2D7A4F', nota:'Fondo de emergencia'},
+  {id:'boa',        label:'Bank of America',     icon:'🏦', tipo:'emergencia', color:'#2D7A4F', nota:'Fondo de emergencia · Meta $3,500'},
 ];
 
 function defaultInversiones(){
@@ -876,13 +880,13 @@ function rInicio(){
 
   // Resumen inversiones compacto
   const totalInvInicio=INV_CFG.filter(c=>c.tipo==='inversion').reduce((s,c)=>s+(ST.inversiones[c.id]?.depositado||0),0);
-  const capitalOne=ST.inversiones['capital_one']?.depositado||0;
-  const pctCap=Math.min(100,(capitalOne/metaEmergencia())*100);
+  const fondoEmergencia=ST.inversiones['boa']?.depositado||0;
+  const pctCap=Math.min(100,(fondoEmergencia/metaEmergencia())*100);
   h+=`<div style="background:#F2F8FE;border:1px solid #C7DEF5;border-radius:8px;padding:14px;margin-bottom:10px;cursor:pointer" onclick="ST.tab='inversiones';render()">
     <div style="font-size:10px;color:#9B9B9B;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px">📈 Inversiones & Fondo — toca para ver detalle</div>
     <div class="g3">
       <div class="mc"><div class="ml">INVERTIDO</div><div class="mv" style="color:#3b82f6">${fI(totalInvInicio)}</div></div>
-      <div class="mc"><div class="ml">EMERGENCIA</div><div class="mv" style="color:#2D7A4F">${fI(capitalOne)}</div></div>
+      <div class="mc"><div class="ml">EMERGENCIA</div><div class="mv" style="color:#2D7A4F">${fI(fondoEmergencia)}</div></div>
       <div class="mc"><div class="ml">META FOND.</div><div class="mv" style="color:${pctCap>=100?'#2D7A4F':'#A0622A'}">${Math.round(pctCap)}%</div></div>
     </div>
   </div>`;
@@ -1037,16 +1041,18 @@ function rInversiones(){
   });
 
   // Fondo de emergencia
+  const aporteSugerido = Math.round(ING_SEM*S_MES*PORC_EMERGENCIA);
+  const mesesParaMeta = aporteSugerido>0 && totalEmerg<metaEmergencia() ? Math.ceil((metaEmergencia()-totalEmerg)/aporteSugerido) : 0;
   h+=`<div style="font-size:10px;color:#9B9B9B;text-transform:uppercase;letter-spacing:2px;margin:18px 0 8px;font-weight:bold">🏦 Fondo de Emergencia</div>`;
   h+=`<div class="dcard" style="border-left-color:#2D7A4F">
     <div class="d-head">
       <div>
-        <div class="d-name">🏦 Capital One Savings</div>
-        <div class="d-sub">Meta: ${fI(metaEmergencia())} (3 meses gastos fijos)</div>
+        <div class="d-name">🏦 Bank of America</div>
+        <div class="d-sub">Meta: ${fI(metaEmergencia())}</div>
       </div>
       <div class="d-nums">
         <div class="d-rest" style="color:#2D7A4F">${fI(totalEmerg)}</div>
-        <div class="d-pag">${fI(metaEmergencia()-totalEmerg)} restantes</div>
+        <div class="d-pag">${fI(Math.max(0,metaEmergencia()-totalEmerg))} restantes</div>
       </div>
     </div>
     <div class="d-prog"><div class="d-pf" style="width:${pctEmerg}%;background:#2D7A4F"></div></div>
@@ -1054,7 +1060,8 @@ function rInversiones(){
       <span>${Math.round(pctEmerg)}% · de ${fI(metaEmergencia())}</span>
       ${pctEmerg>=100?`<span class="d-saldada">✓ Meta alcanzada 🎉</span>`:''}
     </div>
-    <button class="d-paybtn" onclick="abrirDepositoInv('capital_one')">+ Registrar depósito</button>
+    ${pctEmerg<100?`<div style="font-size:11px;color:#A0622A;margin-bottom:10px">💡 Si destinas el ${Math.round(PORC_EMERGENCIA*100)}% de tu ingreso principal (~${fI(aporteSugerido)}/mes) llegarías a la meta en ~${mesesParaMeta} meses.</div>`:''}
+    <button class="d-paybtn" onclick="abrirDepositoInv('boa')">+ Registrar depósito</button>
   </div>`;
 
   // Tip de ahorro
@@ -1064,7 +1071,7 @@ function rInversiones(){
       <div style="margin-bottom:4px">🟢 <strong>Robinhood</strong> — ETFs como VTI o SPY para largo plazo</div>
       <div style="margin-bottom:4px">🔵 <strong>Coinbase</strong> — Max 5-10% de tus inversiones en crypto</div>
       <div style="margin-bottom:4px">🟣 <strong>Fidelity</strong> — IRA o 401k para retiro con ventaja fiscal</div>
-      <div>🏦 <strong>Capital One</strong> — Primero llena el fondo de emergencia antes de invertir agresivo</div>
+      <div>🏦 <strong>Bank of America</strong> — Primero llena tu fondo de emergencia ($3,500) antes de invertir agresivo</div>
     </div>
   </div>`;
 
@@ -1179,6 +1186,31 @@ function rGraficaCategorias(mes){
     </div>
   </div>`;
 }
+function rGraficaFuentesIngreso(mes){
+  const ingM=ST.ingresos.filter(i=>i.fecha?.startsWith(mes));
+  const porFuente={};
+  ingM.forEach(i=>{porFuente[i.fuente]=(porFuente[i.fuente]||0)+i.monto;});
+  const total=Object.values(porFuente).reduce((s,v)=>s+v,0);
+  if(total<=0)return`<div class="card"><div class="clabel">🥧 Ingresos por fuente</div><div style="font-size:12px;color:#9B9B9B;text-align:center;padding:10px 0">Sin ingresos este mes todavía.</div></div>`;
+  const colores=['#2D7A4F','#1B4F8A','#A0622A','#8B5CF6','#DC2626','#22c55e','#3b82f6','#f59e0b','#ec4899','#B83232'];
+  let acc=0,idx=0;
+  const stops=[],legend=[];
+  Object.entries(porFuente).sort((a,b)=>b[1]-a[1]).forEach(([fId,monto])=>{
+    const pct=(monto/total)*100;
+    const color=colores[idx%colores.length];
+    stops.push(`${color} ${acc}% ${acc+pct}%`);
+    const f=FUENTES.find(x=>x.id===fId);
+    legend.push(`<div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0"><span><span style="display:inline-block;width:8px;height:8px;background:${color};border-radius:2px;margin-right:5px"></span>${f?.icon||''} ${esc(f?.label||fId)}</span><span style="font-weight:bold">${Math.round(pct)}%</span></div>`);
+    acc+=pct;idx++;
+  });
+  return`<div class="card">
+    <div class="clabel">🥧 Ingresos por fuente</div>
+    <div style="display:flex;gap:16px;align-items:center">
+      <div style="width:100px;height:100px;border-radius:50%;background:conic-gradient(${stops.join(',')});flex-shrink:0"></div>
+      <div style="flex:1">${legend.join('')}</div>
+    </div>
+  </div>`;
+}
 function rGraficaDeuda(){
   const meses=datosMensuales(6).map(d=>d.key);
   const orig=deudaTotalOrig();
@@ -1209,7 +1241,7 @@ function rHistorial(){
   const semM={};
   ingM.forEach(i=>{const k=getLunes(i.fecha);semM[k]=(semM[k]||0)+i.monto;});
   const sems=Object.entries(semM).sort((a,b)=>a[0].localeCompare(b[0]));
-  let h=rGraficaIngGas()+rGraficaCategorias(mes)+rGraficaDeuda();
+  let h=rGraficaIngGas()+rGraficaCategorias(mes)+rGraficaFuentesIngreso(mes)+rGraficaDeuda();
   h+=`<div class="slabel">Historial — ${getMesLabel(mes)}</div>`;
   sems.forEach(([k,v])=>{
     const pct=Math.min(100,(v/META_SEM)*100),clr=pct>=100?'#2D7A4F':pct>=70?'#A0622A':'#B83232';
