@@ -865,6 +865,8 @@ function rInicio(){
   const ingM=ST.ingresos.filter(i=>i.fecha?.startsWith(mes));
   const tG=gasM.reduce((s,g)=>s+g.monto,0);
   const tI=ingM.reduce((s,i)=>s+i.monto,0);
+  const tInv=(ST.pagos_inversion||[]).filter(p=>p.fecha?.startsWith(mes)).reduce((s,p)=>s+p.monto,0);
+  const disponible=tI-tG-tInv;
   const bal=tI-tG;
   const lh=getLunes(HOY());
   const iS=ST.ingresos.filter(i=>getLunes(i.fecha)===lh).reduce((s,i)=>s+i.monto,0);
@@ -917,12 +919,28 @@ function rInicio(){
     h+=`<div class="racha-card"><div class="racha-ico">🔥</div><div><div class="racha-txt">${racha} semana${racha>1?'s':''} seguida${racha>1?'s':''} cumpliendo tu meta</div><div class="racha-sub">¡Sigue así, Manuel!</div></div></div>`;
   }
 
-  h+=`<div class="card">
-    <div class="clabel">${getMesLabel(mes)}</div>
-    <div class="g3">
-      <div class="mc"><div class="ml">INGRESADO</div><div class="mv" style="color:#2D7A4F">${fI(tI)}</div></div>
-      <div class="mc"><div class="ml">GASTADO</div><div class="mv" style="color:#B83232">${fI(tG)}</div></div>
-      <div class="mc"><div class="ml">BALANCE</div><div class="mv" style="color:${bal>=0?'#2D7A4F':'#B83232'}">${fI(bal)}</div></div>
+  const dk=ST.dark;
+  const bgN=dk?'#262931':'#F2F8FE', bgR=dk?'#2E1E1E':'#FFF2F2', bgI=dk?'#1E2035':'#F2F4FF';
+  const bgD=disponible>=0?(dk?'#1A2E20':'#F0FFF6'):(dk?'#2E1E1E':'#FFF2F2');
+  h+=`<div class="card" style="padding:14px 16px">
+    <div class="clabel" style="margin-bottom:12px">📊 ${getMesLabel(mes)}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div style="background:${bgN};border-radius:10px;padding:12px">
+        <div style="font-size:10px;color:#9B9B9B;letter-spacing:.5px;margin-bottom:4px">💰 GANANCIAS</div>
+        <div style="font-size:22px;font-weight:bold;color:#2D7A4F">${fI(tI)}</div>
+      </div>
+      <div style="background:${bgR};border-radius:10px;padding:12px">
+        <div style="font-size:10px;color:#9B9B9B;letter-spacing:.5px;margin-bottom:4px">🛒 GASTOS</div>
+        <div style="font-size:22px;font-weight:bold;color:#B83232">${fI(tG)}</div>
+      </div>
+      <div style="background:${bgI};border-radius:10px;padding:12px">
+        <div style="font-size:10px;color:#9B9B9B;letter-spacing:.5px;margin-bottom:4px">📈 INVERTIDO</div>
+        <div style="font-size:22px;font-weight:bold;color:#4A5FBF">${fI(tInv)}</div>
+      </div>
+      <div style="background:${bgD};border-radius:10px;padding:12px;border:1.5px solid ${disponible>=0?'#2D7A4F':'#B83232'}">
+        <div style="font-size:10px;color:#9B9B9B;letter-spacing:.5px;margin-bottom:4px">✅ DISPONIBLE</div>
+        <div style="font-size:22px;font-weight:bold;color:${disponible>=0?'#2D7A4F':'#B83232'}">${fI(disponible)}</div>
+      </div>
     </div>
   </div>`;
 
